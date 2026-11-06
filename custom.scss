@@ -1,0 +1,16 @@
+/*-- scss:defaults --*/
+$primary: #0B3A75;
+$navbar-bg: #0B3A75;
+$navbar-fg: #ffffff;
+$body-color: #222222;
+$link-color: #0B3A75;
+$font-family-sans-serif: Georgia, "Times New Roman", serif;
+$headings-font-weight: 600;
+
+/*-- scss:rules --*/
+.navbar-brand img { max-height: 46px; }
+h1.title { color: #0B3A75; font-size: 1.9rem; }
+h2 { color: #0B3A75; border-bottom: 1px solid #d9d9d9; padding-bottom: .3rem; margin-top: 2rem; }
+table { font-size: .92rem; }
+thead th { background: #0B3A75; color: #fff; }
+figcaption, .figure-caption { font-style: italic; color: #555; }

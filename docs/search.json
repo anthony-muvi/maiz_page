@@ -1,0 +1,135 @@
+[
+  {
+    "objectID": "reanalisis.html",
+    "href": "reanalisis.html",
+    "title": "Re-análisis",
+    "section": "",
+    "text": "Ver código R\nlibrary(ggplot2)\nlibrary(knitr)\n\nmedias &lt;- read.csv(\"data/maiz_medias.csv\")\ntabla1 &lt;- read.csv(\"data/tabla1_articulo.csv\")\n\nmedias$D &lt;- factor(medias$densidad_pl_ha)\nmedias$N &lt;- factor(medias$nitrogeno_kg_ha)\nmedias$F &lt;- factor(medias$fraccionamiento)\n\nvariables &lt;- names(medias)[5:16]\nr   &lt;- 4    # bloques\ngle &lt;- 33   # grados de libertad del error: (12 - 1) x (4 - 1)\nazul &lt;- \"#0B3A75\""
+  },
+  {
+    "objectID": "reanalisis.html#qué-se-puede-re-analizar-sin-los-datos-por-parcela",
+    "href": "reanalisis.html#qué-se-puede-re-analizar-sin-los-datos-por-parcela",
+    "title": "Re-análisis",
+    "section": "1. Qué se puede re-analizar sin los datos por parcela",
+    "text": "1. Qué se puede re-analizar sin los datos por parcela\nSin datos por parcela no se pueden revisar los residuos ni la normalidad. Pero en un DBCA balanceado, las medias de los 12 tratamientos y el coeficiente de variación (CV) bastan para reconstruir toda la parte del ANOVA que corresponde a los tratamientos:\n\nLas sumas de cuadrados de D, N, F y sus interacciones salen de las medias, multiplicadas por los 4 bloques.\nEl cuadrado medio del error se recupera del CV: \\(CME = (CV \\times \\bar{y} / 100)^2\\).\nCon eso se recalcula cada valor F y se compara con el que publica el artículo.\n\n\n\nVer código R\nreconstruir &lt;- function(y) {\n  m &lt;- lm(medias[[y]] ~ D * N * F, data = medias, weights = rep(r, 12),\n          contrasts = list(D = contr.sum, N = contr.sum, F = contr.sum))\n  a   &lt;- anova(m)[1:7, ]\n  cv  &lt;- tabla1[tabla1$fuente == \"CV_pct\", y]\n  cme &lt;- (cv / 100 * mean(medias[[y]]))^2\n  Fr  &lt;- a$\"Mean Sq\" / cme\n  data.frame(variable = y,\n             fuente = tabla1$fuente[1:7],\n             gl = a$Df,\n             F_articulo = tabla1[1:7, y],\n             F_recalculado = round(Fr, 2),\n             p_recalculado = round(pf(Fr, a$Df, gle, lower.tail = FALSE), 4))\n}\n\nrec &lt;- do.call(rbind, lapply(variables, reconstruir))"
+  },
+  {
+    "objectID": "reanalisis.html#coinciden-los-valores-f",
+    "href": "reanalisis.html#coinciden-los-valores-f",
+    "title": "Re-análisis",
+    "section": "2. ¿Coinciden los valores F?",
+    "text": "2. ¿Coinciden los valores F?\n\n\nVer código R\nrec$hileras &lt;- ifelse(rec$variable == \"hileras_mazorca\", \"Hileras por mazorca\", \"Otras 11 variables\")\n\nggplot(rec, aes(F_articulo, F_recalculado, colour = hileras)) +\n  geom_abline(linetype = 2, colour = \"grey60\") +\n  geom_point(size = 2.6) +\n  scale_colour_manual(values = c(\"Hileras por mazorca\" = \"#B22222\", \"Otras 11 variables\" = azul)) +\n  labs(x = \"F publicado en el artículo\", y = \"F recalculado con las medias y el CV\", colour = NULL) +\n  theme_classic(base_size = 14) + theme(legend.position = \"top\")\n\n\n\n\n\nCada punto es un valor F (12 variables × 7 fuentes = 84). Sobre la diagonal, el F recalculado es igual al publicado.\n\n\n\n\nEn 11 de las 12 variables el F recalculado coincide con el publicado (las diferencias son de redondeo). Esto confirma que el diseño era balanceado y que las medias de la Tabla 2 son correctas.\nLa excepción es número de hileras por mazorca: ningún valor F publicado corresponde a las medias publicadas.\n\n\nVer código R\nkable(rec[rec$variable == \"hileras_mazorca\", 2:6],\n      caption = \"Hileras por mazorca: F publicado frente a F recalculado.\", row.names = FALSE)\n\n\n\nHileras por mazorca: F publicado frente a F recalculado.\n\n\nfuente\ngl\nF_articulo\nF_recalculado\np_recalculado\n\n\n\n\nD\n1\n0.08\n0.75\n0.3921\n\n\nN\n2\n0.25\n0.08\n0.9200\n\n\nF\n1\n2.10\n4.09\n0.0512\n\n\nDxN\n2\n1.09\n0.25\n0.7797\n\n\nDxF\n1\n0.08\n0.08\n0.7743\n\n\nNxF\n2\n3.11\n3.59\n0.0387\n\n\nDxNxF\n2\n2.60\n1.09\n0.3492\n\n\n\n\n\nCon las medias del propio artículo, la interacción N × F sería significativa (p = 0,039), y el artículo la reporta como no significativa. No se puede saber cuál de las dos tablas está mal sin los datos por parcela, pero las dos no pueden ser correctas a la vez."
+  },
+  {
+    "objectID": "reanalisis.html#rendimiento-la-prueba-de-tukey-para-nitrógeno",
+    "href": "reanalisis.html#rendimiento-la-prueba-de-tukey-para-nitrógeno",
+    "title": "Re-análisis",
+    "section": "3. Rendimiento: la prueba de Tukey para nitrógeno",
+    "text": "3. Rendimiento: la prueba de Tukey para nitrógeno\n\n\nVer código R\ncv_rg  &lt;- tabla1[tabla1$fuente == \"CV_pct\", \"rendimiento_t_ha\"]\ncme_rg &lt;- (cv_rg / 100 * mean(medias$rendimiento_t_ha))^2\nmN &lt;- tapply(medias$rendimiento_t_ha, medias$N, mean)\nn_nivel &lt;- 16   # 2 densidades x 2 fraccionamientos x 4 bloques\ndms &lt;- qtukey(0.95, 3, gle) * sqrt(cme_rg / n_nivel)\n\npares &lt;- combn(names(mN), 2)\ntk &lt;- data.frame(\n  comparacion = paste(pares[1, ], \"vs\", pares[2, ], \"kg N/ha\"),\n  diferencia  = round(abs(mN[pares[1, ]] - mN[pares[2, ]]), 3),\n  DMS = round(dms, 3),\n  p = round(ptukey(abs(mN[pares[1, ]] - mN[pares[2, ]]) / sqrt(cme_rg / n_nivel), 3, gle,\n                   lower.tail = FALSE), 3))\nkable(tk, row.names = FALSE, caption = \"Tukey (5 %) recalculado con el CME del artículo.\")\n\n\n\nTukey (5 %) recalculado con el CME del artículo.\n\n\ncomparacion\ndiferencia\nDMS\np\n\n\n\n\n180 vs 200 kg N/ha\n1.106\n0.987\n0.025\n\n\n180 vs 220 kg N/ha\n0.873\n0.987\n0.091\n\n\n200 vs 220 kg N/ha\n0.233\n0.987\n0.832\n\n\n\n\n\nEl artículo asigna la letra A a 200 y a 220 kg N/ha y la letra B a 180 kg N/ha. Con su propio CME, la diferencia entre 220 y 180 kg N/ha (0,87 t/ha) no supera la DMS de Tukey (0,99 t/ha). Las letras correctas son:\n\n\n\nDosis (kg N/ha)\nRendimiento (t/ha)\nArtículo\nRe-análisis\n\n\n\n\n200\n10,64\nA\na\n\n\n220\n10,41\nA\nab\n\n\n180\n9,53\nB\nb"
+  },
+  {
+    "objectID": "reanalisis.html#el-nitrógeno-es-cuantitativo-contrastes-polinomiales",
+    "href": "reanalisis.html#el-nitrógeno-es-cuantitativo-contrastes-polinomiales",
+    "title": "Re-análisis",
+    "section": "4. El nitrógeno es cuantitativo: contrastes polinomiales",
+    "text": "4. El nitrógeno es cuantitativo: contrastes polinomiales\nTukey trata las dosis como categorías sin orden. Como son cantidades (180, 200 y 220 kg N/ha), lo adecuado es preguntar si el rendimiento sube con la dosis (tendencia lineal) o se estabiliza (tendencia cuadrática).\n\n\nVer código R\ncontrastes &lt;- list(lineal = c(-1, 0, 1), cuadratico = c(1, -2, 1))\npoli &lt;- do.call(rbind, lapply(names(contrastes), function(k) {\n  cc &lt;- contrastes[[k]]\n  sc &lt;- n_nivel * sum(cc * mN)^2 / sum(cc^2)\n  Fv &lt;- sc / cme_rg\n  data.frame(contraste = k, F = round(Fv, 2), p = round(pf(Fv, 1, gle, lower.tail = FALSE), 3))\n}))\nkable(poli, row.names = FALSE, caption = \"Contrastes ortogonales para la dosis de nitrógeno (rendimiento).\")\n\n\n\nContrastes ortogonales para la dosis de nitrógeno (rendimiento).\n\n\ncontraste\nF\np\n\n\n\n\nlineal\n4.71\n0.037\n\n\ncuadratico\n3.69\n0.063\n\n\n\n\n\n\n\nVer código R\nx &lt;- c(180, 200, 220)\najuste &lt;- lm(mN ~ x + I(x^2))\ncurva &lt;- data.frame(x = seq(180, 220, 1))\ncurva$y &lt;- predict(ajuste, curva)\nee &lt;- sqrt(cme_rg / n_nivel)\n\nggplot() +\n  geom_line(data = curva, aes(x, y), colour = \"grey60\") +\n  geom_pointrange(aes(x = x, y = mN, ymin = mN - ee, ymax = mN + ee), colour = azul, size = 0.8) +\n  geom_text(aes(x = x, y = mN + ee + 0.12, label = c(\"b\", \"a\", \"ab\")), colour = azul, size = 5) +\n  scale_x_continuous(breaks = x) +\n  labs(x = \"Dosis de nitrógeno (kg N/ha)\", y = \"Rendimiento en grano (t/ha)\") +\n  theme_classic(base_size = 14)\n\n\n\n\n\nRendimiento medio por dosis de N (± error estándar) y curva cuadrática que pasa por las tres medias.\n\n\n\n\nSolo la tendencia lineal es significativa (p = 0,037). La cuadrática (p = 0,063) no llega al 5 %, así que los datos no permiten afirmar que 200 kg N/ha sea la dosis óptima. Con solo tres dosis separadas por 20 kg, el rango es demasiado estrecho para ubicar un óptimo."
+  },
+  {
+    "objectID": "reanalisis.html#la-mejor-combinación-no-tiene-respaldo",
+    "href": "reanalisis.html#la-mejor-combinación-no-tiene-respaldo",
+    "title": "Re-análisis",
+    "section": "5. La “mejor combinación” no tiene respaldo",
+    "text": "5. La “mejor combinación” no tiene respaldo\nEl artículo destaca 69 444 plantas/ha + 200 kg N/ha en dos aplicaciones (10,94 t/ha) como la mejor combinación. Para comparar los 12 tratamientos entre sí, Tukey exige una diferencia mucho mayor:\n\n\nVer código R\ndms12 &lt;- qtukey(0.95, 12, gle) * sqrt(cme_rg / r)\nrango &lt;- range(medias$rendimiento_t_ha)\nkable(data.frame(DMS_12_tratamientos = round(dms12, 2),\n                 diferencia_maxima_observada = round(diff(rango), 2)))\n\n\n\n\n\nDMS_12_tratamientos\ndiferencia_maxima_observada\n\n\n\n\n2.82\n2.03\n\n\n\n\n\nNi siquiera el mejor y el peor tratamiento difieren estadísticamente. Además, ninguna interacción fue significativa, así que no se debe interpretar una combinación concreta."
+  },
+  {
+    "objectID": "reanalisis.html#muchas-pruebas-pocos-resultados",
+    "href": "reanalisis.html#muchas-pruebas-pocos-resultados",
+    "title": "Re-análisis",
+    "section": "6. Muchas pruebas, pocos resultados",
+    "text": "6. Muchas pruebas, pocos resultados\nEl artículo hace 84 pruebas F (12 variables × 7 fuentes). Si ningún factor tuviera efecto, se esperarían unas 4 pruebas significativas solo por azar (84 × 0,05). Encontraron dos.\n\n\nVer código R\nkable(data.frame(pruebas = nrow(rec),\n           esperadas_por_azar = nrow(rec) * 0.05,\n           significativas_articulo = 2,\n           prob_2_o_mas_por_azar = round(1 - pbinom(1, nrow(rec), 0.05), 2),\n           p_minimo_ajustado_BH = round(min(p.adjust(rec$p_recalculado, \"BH\")), 2)))\n\n\n\n\n\n\n\n\n\n\n\n\npruebas\nesperadas_por_azar\nsignificativas_articulo\nprob_2_o_mas_por_azar\np_minimo_ajustado_BH\n\n\n\n\n84\n4.2\n2\n0.93\n0.94\n\n\n\n\n\nAl corregir por comparaciones múltiples (Benjamini-Hochberg), ningún efecto sigue siendo significativo. Los dos resultados del artículo son compatibles con el azar."
+  },
+  {
+    "objectID": "reanalisis.html#qué-diferencia-podía-detectar-el-experimento",
+    "href": "reanalisis.html#qué-diferencia-podía-detectar-el-experimento",
+    "title": "Re-análisis",
+    "section": "7. ¿Qué diferencia podía detectar el experimento?",
+    "text": "7. ¿Qué diferencia podía detectar el experimento?\n\n\nVer código R\ndmd &lt;- do.call(rbind, lapply(variables, function(y) {\n  cv &lt;- tabla1[tabla1$fuente == \"CV_pct\", y]\n  data.frame(variable = y, CV = cv,\n             diferencia_minima_pct = round((qt(0.975, gle) + qt(0.80, gle)) * sqrt(2 / 24) * cv, 1))\n}))\nkable(dmd, row.names = FALSE,\n      caption = \"Diferencia mínima entre las dos densidades que el ensayo detecta con 80 % de potencia.\")\n\n\n\nDiferencia mínima entre las dos densidades que el ensayo detecta con 80 % de potencia.\n\n\nvariable\nCV\ndiferencia_minima_pct\n\n\n\n\nrendimiento_t_ha\n11.16\n9.3\n\n\naltura_planta_m\n3.58\n3.0\n\n\naltura_mazorca_m\n6.23\n5.2\n\n\ndiametro_tallo_cm\n4.59\n3.8\n\n\ndias_floracion\n0.99\n0.8\n\n\npeso_grano_mazorca_g\n9.05\n7.5\n\n\npeso_tusa_g\n9.94\n8.3\n\n\nlongitud_mazorca_cm\n3.88\n3.2\n\n\ndiametro_mazorca_cm\n2.40\n2.0\n\n\nhileras_mazorca\n3.54\n3.0\n\n\ngranos_hilera\n3.67\n3.1\n\n\npeso_100_granos_g\n5.59\n4.7\n\n\n\n\n\nPara el rendimiento, el ensayo solo podía detectar con seguridad diferencias de 9 % o más entre densidades. Decir que la densidad “no afecta” el rendimiento es más fuerte de lo que los datos permiten: diferencias menores pasarían desapercibidas."
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Dosis y fraccionamiento de nitrógeno en dos densidades de siembra del maíz amarillo duro",
+    "section": "",
+    "text": "Dato\nDetalle\n\n\n\n\nAutores\nJulián Chura, Juan Waldir Mendoza-Cortez, José Carlos de la Cruz\n\n\nRevista\nScientia Agropecuaria, 10(2): 241–248 (2019)\n\n\nDOI\n10.17268/sci.agropecu.2019.02.09\n\n\nCultivo\nMaíz amarillo duro (Zea mays L.), híbrido\n\n\nLugar\nCampo experimental de la UNALM, Lima, Perú (siembra en setiembre de 2011)\n\n\nAnálisis original\nANOVA y prueba de Tukey (5 %) en SAS"
+  },
+  {
+    "objectID": "index.html#el-artículo",
+    "href": "index.html#el-artículo",
+    "title": "Dosis y fraccionamiento de nitrógeno en dos densidades de siembra del maíz amarillo duro",
+    "section": "",
+    "text": "Dato\nDetalle\n\n\n\n\nAutores\nJulián Chura, Juan Waldir Mendoza-Cortez, José Carlos de la Cruz\n\n\nRevista\nScientia Agropecuaria, 10(2): 241–248 (2019)\n\n\nDOI\n10.17268/sci.agropecu.2019.02.09\n\n\nCultivo\nMaíz amarillo duro (Zea mays L.), híbrido\n\n\nLugar\nCampo experimental de la UNALM, Lima, Perú (siembra en setiembre de 2011)\n\n\nAnálisis original\nANOVA y prueba de Tukey (5 %) en SAS"
+  },
+  {
+    "objectID": "index.html#resumen",
+    "href": "index.html#resumen",
+    "title": "Dosis y fraccionamiento de nitrógeno en dos densidades de siembra del maíz amarillo duro",
+    "section": "Resumen",
+    "text": "Resumen\nLos autores evaluaron si la dosis de nitrógeno, su fraccionamiento y la densidad de siembra afectan el crecimiento y el rendimiento del maíz amarillo duro. Midieron doce variables y reportaron solo dos efectos significativos: la dosis de nitrógeno sobre el rendimiento en grano (200 y 220 kg N/ha superiores a 180 kg N/ha) y la densidad sobre el diámetro de tallo. No encontraron interacciones."
+  },
+  {
+    "objectID": "index.html#diseño-experimental",
+    "href": "index.html#diseño-experimental",
+    "title": "Dosis y fraccionamiento de nitrógeno en dos densidades de siembra del maíz amarillo duro",
+    "section": "Diseño experimental",
+    "text": "Diseño experimental\n\n\n\n\n\n\n\nElemento\nDescripción\n\n\n\n\nDiseño\nBloques completos al azar (DBCA), factorial 2 × 3 × 2\n\n\nFactor D: densidad\n62 500 y 69 444 plantas/ha\n\n\nFactor N: nitrógeno (urea)\n180, 200 y 220 kg N/ha\n\n\nFactor F: fraccionamiento\n2 aplicaciones (50 % V3 + 50 % V7) o 3 aplicaciones (20 % V3 + 40 % V7 + 40 % V12)\n\n\nBloques\n4\n\n\nTratamientos\n12\n\n\nUnidades experimentales\n48 parcelas de 6 surcos × 7,2 m (0,80 m entre surcos)\n\n\nVariables\nRendimiento en grano, altura de planta y de mazorca, diámetro de tallo, días a floración femenina, peso de grano y de tusa por mazorca, longitud y diámetro de mazorca, hileras por mazorca, granos por hilera y peso de 100 granos\n\n\n\nModelo del artículo:\n\\[\nY_{ijkl} = \\mu + \\beta_l + D_i + N_j + F_k + (DN)_{ij} + (DF)_{ik} + (NF)_{jk} + (DNF)_{ijk} + \\varepsilon_{ijkl}\n\\]"
+  },
+  {
+    "objectID": "index.html#los-datos-que-publica-el-artículo",
+    "href": "index.html#los-datos-que-publica-el-artículo",
+    "title": "Dosis y fraccionamiento de nitrógeno en dos densidades de siembra del maíz amarillo duro",
+    "section": "Los datos que publica el artículo",
+    "text": "Los datos que publica el artículo\nEl artículo no publica los datos por parcela. Solo presenta los valores F con su coeficiente de variación (Tabla 1) y las medias de los 12 tratamientos (Tabla 2).\n\n\n\nTabla 1 del artículo: valores F y CV.\n\n\n\n\n\nTabla 2 del artículo: medias por tratamiento."
+  },
+  {
+    "objectID": "index.html#nuestra-base-de-datos-ordenada",
+    "href": "index.html#nuestra-base-de-datos-ordenada",
+    "title": "Dosis y fraccionamiento de nitrógeno en dos densidades de siembra del maíz amarillo duro",
+    "section": "Nuestra base de datos ordenada",
+    "text": "Nuestra base de datos ordenada\nPasamos la Tabla 2 a formato tidy: una fila por tratamiento, una columna por variable y los factores con su valor real en vez de códigos (D1, N2, F1…).\n\n\nVer código R\nlibrary(knitr)\nmedias &lt;- read.csv(\"data/maiz_medias.csv\")\nkable(medias[, 1:8], caption = \"Primeras columnas de data/maiz_medias.csv (12 tratamientos).\")\n\n\n\nPrimeras columnas de data/maiz_medias.csv (12 tratamientos).\n\n\n\n\n\n\n\n\n\n\n\n\ntratamiento\ndensidad_pl_ha\nnitrogeno_kg_ha\nfraccionamiento\nrendimiento_t_ha\naltura_planta_m\naltura_mazorca_m\ndiametro_tallo_cm\n\n\n\n\n1\n62500\n180\n2 aplicaciones\n8.907\n2.998\n1.935\n2.379\n\n\n2\n62500\n180\n3 aplicaciones\n9.853\n3.078\n1.961\n2.360\n\n\n3\n62500\n200\n2 aplicaciones\n10.044\n3.047\n1.951\n2.446\n\n\n4\n62500\n200\n3 aplicaciones\n10.720\n3.124\n2.006\n2.331\n\n\n5\n62500\n220\n2 aplicaciones\n10.028\n3.049\n1.966\n2.491\n\n\n6\n62500\n220\n3 aplicaciones\n10.345\n3.058\n2.037\n2.505\n\n\n7\n69444\n180\n2 aplicaciones\n9.948\n3.054\n1.989\n2.384\n\n\n8\n69444\n180\n3 aplicaciones\n9.425\n3.021\n1.939\n2.326\n\n\n9\n69444\n200\n2 aplicaciones\n10.939\n3.108\n2.116\n2.303\n\n\n10\n69444\n200\n3 aplicaciones\n10.853\n3.103\n1.994\n2.338\n\n\n11\n69444\n220\n2 aplicaciones\n10.654\n3.049\n1.969\n2.344\n\n\n12\n69444\n220\n3 aplicaciones\n10.598\n3.183\n2.129\n2.399\n\n\n\n\n\nComprobamos la transcripción: las medias por factor que calculamos con esta base coinciden con las que publica el artículo hasta el tercer decimal.\n\n\nVer código R\naggregate(rendimiento_t_ha ~ nitrogeno_kg_ha, data = medias, FUN = function(x) round(mean(x), 3))\n\n\n  nitrogeno_kg_ha rendimiento_t_ha\n1             180            9.533\n2             200           10.639\n3             220           10.406"
+  },
+  {
+    "objectID": "mejoras.html",
+    "href": "mejoras.html",
+    "title": "Errores encontrados y propuesta",
+    "section": "",
+    "text": "Dónde\nProblema\nConsecuencia\n\n\n\n\nTabla 1\nLos valores F de hileras por mazorca no corresponden a las medias de la Tabla 2\nLa interacción N × F sería significativa (p = 0,039) y se reporta como no significativa\n\n\nTabla 2\nLetras de Tukey: 220 kg N/ha lleva “A” cuando no difiere de 180 kg N/ha\nSe exagera la ventaja de las dosis altas\n\n\nAnálisis\nEl nitrógeno, un factor cuantitativo, se compara con Tukey\nNo se estima la forma de la respuesta ni una dosis óptima\n\n\nResultados\nSe destaca una “mejor combinación” sin interacción significativa\nRecomendación sin respaldo estadístico\n\n\nAnálisis\n84 pruebas F sin corrección por comparaciones múltiples\nLos dos efectos significativos son compatibles con el azar\n\n\nTabla 2\nLa densidad D1 figura como 65 200 plantas/ha; en la metodología es 62 500\nCon 0,80 m × 0,40 m y dos plantas por golpe salen 62 500; 65 200 es un error de digitación\n\n\nTabla 2 y conclusiones\nLa segunda aplicación figura como V7 (metodología), V6 (Tabla 2) y V2 (conclusiones)\nNo se sabe con certeza cuándo se aplicó el nitrógeno\n\n\nDatos\nNo se publican los datos por parcela\nNo se pueden revisar supuestos (normalidad, homogeneidad) ni repetir el análisis completo"
+  },
+  {
+    "objectID": "mejoras.html#errores-e-inconsistencias-del-artículo",
+    "href": "mejoras.html#errores-e-inconsistencias-del-artículo",
+    "title": "Errores encontrados y propuesta",
+    "section": "",
+    "text": "Dónde\nProblema\nConsecuencia\n\n\n\n\nTabla 1\nLos valores F de hileras por mazorca no corresponden a las medias de la Tabla 2\nLa interacción N × F sería significativa (p = 0,039) y se reporta como no significativa\n\n\nTabla 2\nLetras de Tukey: 220 kg N/ha lleva “A” cuando no difiere de 180 kg N/ha\nSe exagera la ventaja de las dosis altas\n\n\nAnálisis\nEl nitrógeno, un factor cuantitativo, se compara con Tukey\nNo se estima la forma de la respuesta ni una dosis óptima\n\n\nResultados\nSe destaca una “mejor combinación” sin interacción significativa\nRecomendación sin respaldo estadístico\n\n\nAnálisis\n84 pruebas F sin corrección por comparaciones múltiples\nLos dos efectos significativos son compatibles con el azar\n\n\nTabla 2\nLa densidad D1 figura como 65 200 plantas/ha; en la metodología es 62 500\nCon 0,80 m × 0,40 m y dos plantas por golpe salen 62 500; 65 200 es un error de digitación\n\n\nTabla 2 y conclusiones\nLa segunda aplicación figura como V7 (metodología), V6 (Tabla 2) y V2 (conclusiones)\nNo se sabe con certeza cuándo se aplicó el nitrógeno\n\n\nDatos\nNo se publican los datos por parcela\nNo se pueden revisar supuestos (normalidad, homogeneidad) ni repetir el análisis completo"
+  },
+  {
+    "objectID": "mejoras.html#qué-cambia-en-las-conclusiones",
+    "href": "mejoras.html#qué-cambia-en-las-conclusiones",
+    "title": "Errores encontrados y propuesta",
+    "section": "Qué cambia en las conclusiones",
+    "text": "Qué cambia en las conclusiones\n\nLa conclusión de que más nitrógeno que 180 kg N/ha mejora el rendimiento se sostiene solo como tendencia lineal débil (p = 0,037), y no sobrevive a la corrección por pruebas múltiples.\nNo se puede afirmar que 200 kg N/ha sea la dosis óptima: 200 y 220 no difieren, y la curvatura no es significativa.\nLa ausencia de efecto de la densidad y del fraccionamiento es, en realidad, falta de potencia: el ensayo no detecta diferencias de rendimiento menores al 9 %."
+  },
+  {
+    "objectID": "mejoras.html#propuesta-repetir-el-experimento-con-un-libro-de-campo-reproducible",
+    "href": "mejoras.html#propuesta-repetir-el-experimento-con-un-libro-de-campo-reproducible",
+    "title": "Errores encontrados y propuesta",
+    "section": "Propuesta: repetir el experimento con un libro de campo reproducible",
+    "text": "Propuesta: repetir el experimento con un libro de campo reproducible\nDiseñamos la réplica del experimento con Tarpuy (paquete inti de R), con los mismos factores y bloques que el artículo, para registrar esta vez los datos de cada parcela.\n\nlibrary(inti)\n\nfactores &lt;- list(\n  densidad        = c(\"62500\", \"69444\"),\n  nitrogeno       = c(\"180\", \"200\", \"220\"),\n  fraccionamiento = c(\"2ap\", \"3ap\")\n)\n\nfb &lt;- design_repblock(nfactors = 3, factors = factores, type = \"rcbd\",\n                      rep = 4, zigzag = TRUE, seed = 2019)\n\ntarpuy_plotdesign(fb)\n\n\n\n\nCroquis de campo generado con inti: 4 bloques × 12 tratamientos, en zigzag.\n\n\n\n\nVer código R\nlibro &lt;- read.csv(\"data/libro_campo_maiz.csv\")\nknitr::kable(head(libro[, c(\"plots\", \"block\", \"densidad\", \"nitrogeno\", \"fraccionamiento\")], 12),\n             caption = \"Primer bloque del libro de campo (48 parcelas en total).\")\n\n\n\nPrimer bloque del libro de campo (48 parcelas en total).\n\n\nplots\nblock\ndensidad\nnitrogeno\nfraccionamiento\n\n\n\n\n101\n1\n69444\n200\n2ap\n\n\n102\n1\n69444\n200\n3ap\n\n\n103\n1\n62500\n200\n3ap\n\n\n104\n1\n69444\n180\n3ap\n\n\n105\n1\n62500\n200\n2ap\n\n\n106\n1\n69444\n220\n3ap\n\n\n107\n1\n69444\n220\n2ap\n\n\n108\n1\n62500\n220\n2ap\n\n\n109\n1\n62500\n180\n2ap\n\n\n110\n1\n69444\n180\n2ap\n\n\n111\n1\n62500\n180\n3ap\n\n\n112\n1\n62500\n220\n3ap\n\n\n\n\n\nMejoras que proponemos para la réplica:\n\nPublicar los datos por parcela junto al artículo (CSV en un repositorio).\nAgregar un testigo sin nitrógeno y ampliar el rango de dosis (por ejemplo 0, 100, 200 y 300 kg N/ha) para poder ajustar una curva de respuesta y estimar la dosis óptima económica.\nAnalizar el nitrógeno con regresión o contrastes polinomiales, no con Tukey.\nMedir el nitrógeno del suelo antes de la siembra, ya que los autores atribuyen la falta de respuesta al N residual."
+  },
+  {
+    "objectID": "mejoras.html#referencias",
+    "href": "mejoras.html#referencias",
+    "title": "Errores encontrados y propuesta",
+    "section": "Referencias",
+    "text": "Referencias\nChura, J., Mendoza-Cortez, J. W., & de la Cruz, J. C. (2019). Dosis y fraccionamiento de nitrógeno en dos densidades de siembra del maíz amarillo duro. Scientia Agropecuaria, 10(2), 241–248. https://doi.org/10.17268/sci.agropecu.2019.02.09\nLozano-Isla, F. (2024). inti: Tools and Statistical Procedures in Plant Science [Paquete de R]. https://CRAN.R-project.org/package=inti"
+  }
+]
